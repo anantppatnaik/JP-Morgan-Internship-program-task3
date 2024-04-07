@@ -1,0 +1,97 @@
+//Graph.Tsx
+import React, { Component } from 'react';
+
+interface IProps {
+  data: any;
+}
+
+class Graph extends Component<IProps> {
+  componentDidMount() {
+    const elem: any = document.getElementsByTagName('perspective-viewer')[0];
+    elem.setAttribute('view', 'y_line');
+    elem.setAttribute('row-pivots', '["timestamp"]');
+    elem.setAttribute('columns', '["ratio", "upper_bound", "lower_bound", "trigger_alert"]');
+    elem.setAttribute('aggregates', '{"ratio":"avg","upper_bound":"avg","lower_bound":"avg","trigger_alert":"distinct count"}');
+  }
+
+  componentDidUpdate(prevProps: IProps) {
+    if (prevProps.data !== this.props.data) {
+      const elem: any = document.getElementsByTagName('perspective-viewer')[0];
+      elem.update(this.props.data);
+    }
+  }
+
+  render() {
+    return <perspective-viewer style={{ height: '400px' }} />;
+  }
+}
+
+export default Graph;
+
+//DataManipulator.ts
+
+interface Row {
+  timestamp: number;
+  price_abc: number;
+  price_def: number;
+  ratio: number;
+  upper_bound: number;
+  lower_bound: number;
+  trigger_alert?: number;
+}
+
+class DataManipulator {
+  generateRow(serverRespond: any): Row {
+    const price_abc = serverRespond[0].top_ask_price;
+    const price_def = serverRespond[1].top_ask_price;
+    const ratio = price_abc / price_def;
+    const upper_bound = 1.05;
+    const lower_bound = 0.95;
+    const trigger_alert = ratio > upper_bound || ratio < lower_bound ? ratio : undefined;
+
+    return {
+      timestamp: Date.now(),
+      price_abc,
+      price_def,
+      ratio,
+      upper_bound,
+      lower_bound,
+      trigger_alert
+    };
+  }
+}
+
+export default DataManipulator;
+
+//App.tsx
+
+import React, { useEffect, useState } from 'react';
+import DataGraph from './DataGraph';
+import DataManipulator from './DataManipulator';
+
+const App = () => {
+  const [data, setData] = useState<Row[]>([]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const fetchData = async () => {
+        const response = await fetch('/api/data');
+        const serverRespond = await response.json();
+        const manipulatedData = new DataManipulator().generateRow(serverRespond);
+        setData([...data, manipulatedData]);
+      };
+      fetchData();
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [data]);
+
+  return (
+    <div>
+      <button onClick={() => setData([])}>Start Streaming Data</button>
+      <DataGraph data={data} />
+    </div>
+  );
+};
+
+export default App;
